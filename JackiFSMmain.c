@@ -98,6 +98,5 @@ void main(void){
             Clock_Delay1ms(Spt->delay);   // wait
             Input = Reflectance_Read(1000);
             Spt = Spt->next[Input];       // next depends on input and state    }
-
-}
+    }
 }

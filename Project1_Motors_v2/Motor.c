@@ -10,19 +10,15 @@
    Jonathan W. Valvano, ISBN: 9781074544300, copyright (c) 2019
  For more information about my classes, my research, and my books, see
  http://users.ece.utexas.edu/~valvano/
-
 Simplified BSD License (FreeBSD License)
 Copyright (c) 2019, Jonathan Valvano, All rights reserved.
-
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
-
 1. Redistributions of source code must retain the above copyright notice,
    this list of conditions and the following disclaimer.
 2. Redistributions in binary form must reproduce the above copyright notice,
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
-
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,7 +29,6 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
 AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 The views and conclusions contained in the software and documentation are
 those of the authors and should not be interpreted as representing official
 policies, either expressed or implied, of the FreeBSD Project.
@@ -50,8 +45,6 @@ policies, either expressed or implied, of the FreeBSD Project.
 #include "msp.h"
 #include "../inc/CortexM.h"
 #include "../inc/PWM.h"
-
-uint16_t dutyRight, dutyLeft;
 
 void SysTick_Wait1us(uint32_t delay){
     SysTick->LOAD = (delay*48 - 1);// count down to zero
@@ -89,22 +82,6 @@ void Motor_Init(void){
     PWM_Init34(15000, 1500, 1500);
 }
 
-void Motor_Drive(uint8_t direction, uint16_t dutyR, uint8_t dutyL){
-    dutyRight = dutyR;
-    dutyLeft = dutyL;
-
-    if (direction == 0)
-        Motor_Stop();
-    else if (direction == 1)
-        Motor_Forward();
-    else if (direction == 2)
-        Motor_Backward();
-    else if (direction == 3)
-        Motor_Left();
-    else if (direction == 4)
-        Motor_Right();
-}
-
 void Motor_Stop(void){
 // Stops both motors, puts driver to sleep
 // Returns right away
@@ -114,7 +91,7 @@ void Motor_Stop(void){
     P5->OUT &= ~0x30;
 }
 
-void Motor_Forward(){
+void Motor_Forward(uint16_t dutyRight, uint16_t dutyLeft){
 // Drives both motors forward at duty (100 to 9900)
 
     // Unsleep motors and set direction forward
@@ -125,7 +102,7 @@ void Motor_Forward(){
     PWM_Duty3(dutyRight);
     PWM_Duty4(dutyLeft);
 }
-void Motor_Backward(){
+void Motor_Backward(uint16_t dutyRight, uint16_t dutyLeft){
 // Drives both motors backward at duty (100 to 9900)
 
     // Unsleep motors and set direction forward
@@ -137,7 +114,7 @@ void Motor_Backward(){
     PWM_Duty4(dutyLeft);
 }
 
-void Motor_Left(){
+void Motor_Left(uint16_t dutyRight, uint16_t dutyLeft){
 // Drives just the left motor forward at duty (100 to 9900)
 // Right motor is stopped (sleeping)
 
@@ -150,7 +127,7 @@ void Motor_Left(){
     PWM_Duty3(dutyRight);
     PWM_Duty4(dutyLeft);
 }
-void Motor_Right(){
+void Motor_Right(uint16_t dutyRight, uint16_t dutyLeft){
 // Drives just the right motor forward at duty (100 to 9900)
 // Left motor is stopped (sleeping)
 
@@ -162,4 +139,24 @@ void Motor_Right(){
     // Set PWM duty cycles
     PWM_Duty3(dutyRight);
     PWM_Duty4(dutyLeft);
+}
+
+void Motor_Drive(uint8_t direction, uint16_t dutyRight, uint16_t dutyLeft){
+    switch (direction) {
+        case 0:
+            Motor_Stop();
+            break;
+        case 1:
+            Motor_Forward(dutyRight, dutyLeft);
+            break;
+        case 2:
+            Motor_Backward(dutyRight, dutyLeft);
+            break;
+        case 3:
+            Motor_Left(dutyRight, dutyLeft);
+            break;
+        case 4:
+            Motor_Right(dutyRight, dutyLeft);
+            break;
+    }
 }
