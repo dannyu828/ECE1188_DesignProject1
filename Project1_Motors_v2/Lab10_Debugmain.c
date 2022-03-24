@@ -68,32 +68,64 @@ policies, either expressed or implied, of the FreeBSD Project.
 #include "..\inc\LaunchPad.h"
 #include "..\inc\FlashProgram.h"
 
+#define SIZE 256
+uint8_t P1Buf[SIZE];
+uint8_t P2Buf[SIZE];
+uint8_t I = 0;
 
 void Debug_Init(void){
   // write this as part of Lab 10
+    P1Buf[SIZE];
+    P2Buf[SIZE];
 }
 void Debug_Dump(uint8_t x, uint8_t y){
   // write this as part of Lab 10
+    P1Buf[I] = x;
+    P2Buf[I] = y;
+    I = (I+1)&0x1F;
 }
+/*Debug_FlashInit() which will erase the 128 kibibytes of flash ROM,
+addresses 0x00020000 to 0x0003FFFF. Erasing ROM sets the data to
+0xFF. You may pick any block size from 32 bytes to 512 bytes. Let 2n be
+your block size. There are 217/2n blocks in this 128k space. If the data of
+a block are 0xFF, then the block is considered empty. */
 void Debug_FlashInit(void){ 
   // write this as part of Lab 10
 }
+/*The function Debug_FlashRecord() will record 2n bytes into the next
+free block on the flash ROM. You will be able to observe the recorded
+data later using the debugger*/
 void Debug_FlashRecord(uint16_t *pt){
   // write this as part of Lab 10
 }
 void SysTick_Handler(void){ // every 1ms
   // write this as part of Lab 10
+     P2->OUT |= 0x01;
+     Debug_Dump();
+     P2->OUT &= ~0x01;
 }
 
 int main(void){
   // write this as part of Lab 10
-
-  while(1){
-  // write this as part of Lab 10
-
-  }
+    Clock_Init48MHz();
+    LaunchPad_Init(); // built-in switches and LEDs
+    Debug_Init();
+    for(i=0;i<SIZE;i++){
+        Buffer[i] = (i<<8)+(255-i); // test data
+    }
+    i = 0;
+    while(1){
+       P1->OUT |= 0x01;
+       Debug_FlashInit();
+       P1->OUT &= ~0x01;
+       P2->OUT |= 0x01;
+       Debug_FlashRecord(Buffer); // 114us
+       P2->OUT &= ~0x01;
+       i++;
+    }
 }
 
+/*
 int Program10_1(void){ uint8_t data=0;
   Clock_Init48MHz();
   Debug_Init();
