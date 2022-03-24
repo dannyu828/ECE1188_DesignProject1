@@ -39,10 +39,8 @@ policies, either expressed or implied, of the FreeBSD Project.
 #include "../inc/CortexM.h"
 #include "../inc/PWM.h"
 #include "../inc/LaunchPad.h"
-#include "../inc/TExaS.h"
-//#include "../inc/AP.h"
+#include "../inc/SysTickInt.h"
 #include "../inc/UART0.h"
-#include "../inc/Bump.h"
 #include "../inc/BumpInt.h"
 #include "../inc/Reflectance.h"
 #include "../inc/Motor.h"
@@ -55,64 +53,127 @@ void HandleCollision(uint8_t bumpSensor){
    CollisionFlag = 1;
 }
 
-uint16_t currDutyLeft, currDutyRight;
-
 struct State {
-  uint8_t out;                // 2-bit output
-  uint16_t d1;
-  uint16_t d2;
-  uint16_t delay;              // time to delay in 1ms
-  const struct State *next[16]; // Next if 2-bit input is 0-3
+  uint8_t color;                   // 2-bit output
+  uint16_t left;
+  uint16_t right;
+  void (*func)(uint16_t,uint16_t); // calls output function 
+  const struct State *next[10];    // Next staes
 };
 typedef const struct State State_t;
 
-#define Center     &fsm[0]
-#define Left1      &fsm[1]
-#define Left2      &fsm[2]
-#define Right1     &fsm[3]
-#define Right2     &fsm[4]
-#define HT1        &fsm[5]
-#define HT2        &fsm[6]
-#define Straight   &fsm[7]
-#define Stop       &fsm[8]
+#define Straight   &fsm[0]
+#define Left       &fsm[1]
+#define HardLeft   &fsm[2]
+#define Right      &fsm[3]
+#define HardRight  &fsm[4]
+#define Search     &fsm[5]
+#define Stop       &fsm[6]
+
+#define fullSpeed 10000
+#define softSpeed (FSpeed - 100)
+#define midSpeed (FSpeed - 500)
+#define turnSpeed (FSpeed - 4000)
+#define hardTurnSpeed (FSpeed - 2000)
+
+#define DARK      0x00
+#define RED       0x01
+#define GREEN     0x02
+#define YELLOW    0x03
+#define BLUE      0x04
+#define PINK      0x05
+#define SKYBLUE   0x06
+#define WHITE     0x07
+
+void Motor_HardLeft(uint16_t dutyLeft, uint16_t dutyRight) {
+  // Right forward, left backward
+}
+
+void Motor_HardRight(uint16_t dutyLeft, uint16_t dutyRight) {
+  // Left forward, right backward
+}
+
+void Motor_Search(uint16_t dutyLeft, uint16_t dutyRight) {
+  // Go left and then right to search for line
+}
+
+void Motor_Stop_Func(uint16_t dutyLeft, uint16_t dutyRight) {
+  Motor_Stop();
+}
 
 State_t fsm[9]={
-  {1, 1500, 1500, 50, {Center, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}},  // Center
-  {3, 1500, 0, 50, {HT1, Left2, Left2, Left2, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}},  // Left1
-  {3, 3000, 0, 50, {HT1, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}},   // Left2
-  {4, 0, 1500, 50, {HT2, Left1, Left1, Left1, Right2, Center, Center, Center,Right2,Center,Center,Center,Right2,Center,Center,Center}}, //Right1
-  {4, 0, 3000, 50, {HT2, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}}, //Right2
-  {3, 4500, 0, 50, {Straight, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}}, //HT1
-  {4, 0, 4500, 50, {Straight, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}}, //HT2
-  {1, 1500, 1500, 50, {Stop, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}}, //Straight
-  {0, 0, 0, 50, {Stop, Left1, Left1, Left1, Right1, Center, Center, Center,Right1,Center,Center,Center,Right1,Center,Center,Center}} //Stop
+  {GREEN, 2000, 2000, &Motor_Forward, {Straight, Left, HardLeft, Right, HardRight, Search, Search, Search, Straight, Straight }}, // Straight
+  {PINK, 2500, &Motor_Left, {Straight, Left, HardLeft, Right, Right, Search, Search, Search, Left, Left }},                    // Left
+  {YELLOW, 0, 1500, &Motor_HardLeft, { Straight, Left, HardLeft, Right, Right, Search, Search, Search, HardLeft, HardLeft }},      // HardLeft
+  {PINK, 4500, 0, &Motor_Right, { Straight, Left, Left, Right, HardRight, Search, Search, Search, Right, Right }},              // Right
+  {YELLOW, 0, 4500, &Motor_HardRight { Straight, Left, Left, Right, HardRight, Search, Search, Search, HardRight, HardRight }},  // HardRight
+  {WHITE, 1500, 1500, &Motor_Search, { Straight, Left, HardLeft, Right, HardRight, Search, HardLeft, HardRight, Search, Stop }}, // Search
+  {RED, 0, 0, &Motor_Stop_Func, { Search, Search, Search, Search, Search, Search, Search, Search, Search, Stop }}                   // Stop
 };
 
-State_t *Spt;  // pointer to the current state
-uint32_t Input;
-uint32_t Output;
+State_t *Spt;     // pointer to the current state
+State_t *lastSpt; // pointer to previous state
+uint8_t input;    // line sensor data
+uint8_t time;     // time elapsed
+uint8_t idx;      // state index
+bool lost;        // lost flag
 
-State_t *lastSpt;
+void inputToState() {
+  uint8_t tempIdx;
+  if (input == 0x18 || input == 0x3C)
+    tempIdx = 0;
+  else if (input == 0xF0 || input == 0xE0)
+    tempIdx = 1;
+  else if (input == 0xC0 || input == 0x80)
+    tempIdx = 2;
+  else if (input == 0x0F || input == 0x07)
+    tempIdx = 3;
+  else if (input == 0x03 || input == 0x01)
+    tempIdx = 4;
+  else if (input == 0x00 || input == 0xFF) {
+    if (lost == 1)
+      tempIdx = 9;
+    else
+      tempIdx = 5;
+  }
+  else if (input == 0x7F)
+    tempIdx = 6;
+  else if (input == 0xFE)
+    tempIdx = 7;
+  else
+    tempIdx = 8;
+
+  if (tempIdx == 9)
+    lost = 0;
+
+  return tempIdx;
+}
+
+void SysTick_Handler(void){ // every 1ms
+    if (time % 5 == 0){
+        Reflectance_Start();
+    }
+    else if (time % 5 == 1){
+        input = Reflectance_End();
+        idx = lineToState(input);
+        Spt=Spt->next[idx];
+        (*Spt->func)(Spt->left,Spt->right);
+        //Clock_Delay1ms(Spt->delay)
+    }
+    time++;
+}
 
 void main(void){
     Clock_Init48MHz();
     LaunchPad_Init();
     Reflectance_Init();
     Motor_Init();
-    CollisionFlag = 0;
+    CollisionFlag = time = idx = lost = 0;
+    SysTick_Init(48000, 0);
     BumpInt_Init(&HandleCollision);
-    Spt = Center;
+    Spt = Straight;
     EnableInterrupts();
     while(1){
-        if (Spt != lastSpt) {
-            Motor_Drive(Spt->out, Spt->d1, Spt->d2);     // output to two motors
-            currDutyRight = Spt->d1;
-            currDutyLeft = Spt->d2;
-        }
-        Clock_Delay1ms(Spt->delay);   // wait
-        Input = Reflectance_Read(1000);
-        Input = (Input & 0x3C) >> 2;
-        lastSpt = Spt;
-        Spt = Spt->next[Input];       // next depends on input and state
+        WaitForInterrupt();
     }
 }
