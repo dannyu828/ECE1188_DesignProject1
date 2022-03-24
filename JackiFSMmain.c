@@ -43,9 +43,17 @@ policies, either expressed or implied, of the FreeBSD Project.
 //#include "../inc/AP.h"
 #include "../inc/UART0.h"
 #include "../inc/Bump.h"
+#include "../inc/BumpInt.h"
 #include "../inc/Reflectance.h"
 #include "../inc/Motor.h"
 #include "../inc/SysTickInts.h"
+
+uint8_t CollisionData, CollisionFlag;  // mailbox
+void HandleCollision(uint8_t bumpSensor){
+   Motor_Stop();
+   CollisionData = bumpSensor;
+   CollisionFlag = 1;
+}
 
 uint16_t currDutyLeft, currDutyRight;
 
@@ -91,7 +99,10 @@ void main(void){
     LaunchPad_Init();
     Reflectance_Init();
     Motor_Init();
+    CollisionFlag = 0;
+    BumpInt_Init(&HandleCollision);
     Spt = Center;
+    EnableInterrupts();
     while(1){
         if (Spt != lastSpt) {
             Motor_Drive(Spt->out, Spt->d1, Spt->d2);     // output to two motors
