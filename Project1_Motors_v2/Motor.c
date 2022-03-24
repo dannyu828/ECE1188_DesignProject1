@@ -79,7 +79,7 @@ void Motor_Init(void){
     P3->OUT &= ~0xC0;
 
     // Initialize PWM
-    PWM_Init34(15000, 1500, 1500);
+    PWM_Init34(12000, 1500, 1500);
 }
 
 void Motor_Stop(void){
@@ -147,16 +147,32 @@ void Motor_Drive(uint8_t direction, uint16_t dutyRight, uint16_t dutyLeft){
             Motor_Stop();
             break;
         case 1:
-            Motor_Forward(dutyRight, dutyLeft);
+            Motor_Forward(2250, 2250);
             break;
         case 2:
-            Motor_Backward(dutyRight, dutyLeft);
+            Motor_Backward(2250, 2250);
             break;
         case 3:
-            Motor_Left(dutyRight, dutyLeft);
+            Motor_Left(2000, 2000);
             break;
         case 4:
-            Motor_Right(dutyRight, dutyLeft);
+            Motor_Right(2000, 2000);
+            break;
+        case 5:
+            Motor_Left(1250, 1250);
+            break;
+        case 6:
+            Motor_Right(1250, 1250);
             break;
     }
+//    if (direction == 0)
+//        Motor_Stop();
+//    else if (direction == 1)
+//        Motor_Forward(dutyRight, dutyLeft);
+//    else if (direction == 2)
+//        Motor_Backward(dutyRight, dutyLeft);
+//    else if (direction == 3)
+//        Motor_Left(dutyRight, dutyLeft);
+//    else if (direction == 4)
+//        Motor_Right(dutyRight, dutyLeft);
 }
