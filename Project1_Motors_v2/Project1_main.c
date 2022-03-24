@@ -63,6 +63,42 @@ policies, either expressed or implied, of the FreeBSD Project.
 #include "..\inc\TimerA1.h"
 #include "..\inc\TExaS.h"
 
+
+struct State {
+  uint8_t out;                // 2-bit output
+  uint16_t d1;
+  uint16_t d2;
+  uint16_t delay;              // time to delay in 1ms
+  const struct State *next[8]; // Next if 2-bit input is 0-3
+};
+typedef const struct State State_t;
+
+#define Center    &fsm[0]
+#define Left1      &fsm[1]
+#define Left2      &fsm[2]
+#define Right1     &fsm[3]
+#define Right2     &fsm[4]
+#define HT1        &fsm[5]
+#define HT2        &fsm[6]
+#define Straight   &fsm[7]
+#define Stop       &fsm[8]
+
+State_t fsm[9]={
+  {1, 1000, 1000, 50, {Center, Left1, Left1, Left1, Center, Right1, Right1, Right1}},  // Center
+  {3, 1000, 0, 50, {HT1, Left2, Left2, Left2, Center, Right1, Right1, Right1}},  // Left1
+  {3, 2000, 0, 50, {HT1, Left1, Left1, Left1, Center, Right1, Right1, Right1}},   // Left2
+  {4, 0, 1000, 50, {HT2, Left1, Left1, Left1, Center, Right2, Right2, Right2}}, //Right1
+  {4, 0, 2000, 50, {HT2, Left1, Left1, Left1, Center, Right1, Right1, Right1}}, //Right2
+  {3, 3000, 0, 50, {Straight, Left1, Left1, Left1, Center, Right1, Right1, Right1}}, //HT1
+  {4, 0, 3000, 50, {Straight, Left1, Left1, Left1, Center, Right1, Right1, Right1}}, //HT2
+  {1, 1000, 1000, 50, {Stop, Left1, Left1, Left1, Center, Right1, Right1, Right1 }}, //Straight
+  {0, 0, 0, 50, {Stop, Left1, Left1, Left1, Center, Right1, Right1, Right1}} //Stop
+};
+
+State_t *Spt;  // pointer to the current state
+uint32_t Input;
+uint32_t Output;
+
 // Driver test
 void TimedPause(uint32_t time){
   Clock_Delay1ms(time);          // run for a while and stop
@@ -111,9 +147,67 @@ int main(void){
     // like Program13_1, but uses TimerA1 to periodically
     // check the bump switches, stopping the robot on a collision
  
- 
+    Clock_Init48MHz();
+        LaunchPad_Init();
+        Reflectance_Init();
+        Motor_Init();
+        Spt = Center;
+        while(1){
+                Motor_Drive(Spt->out, Spt->d1, Spt->d2);     // do output to two motors
+                Clock_Delay1ms(Spt->delay);   // wait
+                Input = Reflectance_Read(1000);
+                Inuput = (Input & 0x3C) >> 2;
+                Spt = Spt->next[Input];       // next depends on input and state    }
   while(1){
     int x = Program13_1();
   }
 }
+
+        void (*BumpTask)(uint8_t);
+
+        // Initialize Bump sensors
+        // Make six Port 4 pins inputs
+        // Activate interface pullup
+        // pins 7,6,5,3,2,0
+        // Interrupt on falling edge (on touch)
+        void BumpInt_Init(void(*task)(uint8_t)){
+            // write this as part of Lab 14
+            P4->SEL0 &= ~0xED;
+            P4->SEL1 &= ~0xED;    // configure sensors as GPIO
+            P4->DIR &= ~0xED;     // make sensors in
+            P4->REN |= 0xED;      // enable internal pull resistors for sensors
+            P4->OUT |= 0xED;      // make sensors pull-up
+            P4->IES |= 0xED;      // sensors are falling edge events
+            P4->IFG &= ~0xED;     // initially clear flags
+            P4->IE |= 0xED;       // arm interrupts
+            NVIC->IP[9] = (NVIC->IP[9]&0xFF00FFFF)|0x00400000; // priority 2
+            NVIC->ISER[1] = 0x00000040;        // enable interrupt 38 in NVIC
+            BumpTask = task;
+        }
+        // Read current state of 6 switches
+        // Returns a 6-bit positive logic result (0 to 63)
+        // bit 5 Bump5
+        // bit 4 Bump4
+        // bit 3 Bump3
+        // bit 2 Bump2
+        // bit 1 Bump1
+        // bit 0 Bump0
+        uint8_t Bump_Read(void){
+            // write this as part of Lab 14
+            uint8_t result;
+            result = (~P4->IN)&0x01;       // sets bit 0 with positive logic;
+            result |= ((~P4->IN)&0x0C)>>1; // sets bits 1-2 with positive logic;
+            result |= ((~P4->IN)&0xE0)>>2; // sets bits 1-2 with positive logic;
+
+            return result;
+        }
+        // we do not care about critical section/race conditions
+        // triggered on touch, falling edge
+        void PORT4_IRQHandler(void){
+            // write this as part of Lab 14
+            uint8_t data;
+            data = Bump_Read();
+            (*BumpTask)(data);
+        }
+
 
