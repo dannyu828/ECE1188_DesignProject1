@@ -75,8 +75,17 @@ uint8_t I = 0;
 
 void Debug_Init(void){
   // write this as part of Lab 10
-    P1Buf[SIZE];
-    P2Buf[SIZE];
+    P1->SEL0 = 0x00;
+    P1->SEL1 = 0x00;                        // configure P1.4 and P1.1 as GPIO
+    P1->DIR = 0x01;                         // make P1.4 and P1.1 in, P1.0 output
+    P1->REN = 0x12;                         // enable pull resistors on P1.4 and P1.1
+    P1->OUT = 0x12;                         // P1.4 and P1.1 are pull-up
+
+    P2->SEL0 = 0x00;
+    P2->SEL1 = 0x00;                        // configure P2.2-P2.0 as GPIO
+    P2->DS = 0x07;                          // make P2.2-P2.0 high drive strength
+    P2->DIR = 0x07;                         // make P2.2-P2.0 out
+    P2->OUT = 0x00;                         // all LEDs off
 }
 void Debug_Dump(uint8_t x, uint8_t y){
   // write this as part of Lab 10
@@ -89,37 +98,28 @@ addresses 0x00020000 to 0x0003FFFF. Erasing ROM sets the data to
 0xFF. You may pick any block size from 32 bytes to 512 bytes. Let 2n be
 your block size. There are 217/2n blocks in this 128k space. If the data of
 a block are 0xFF, then the block is considered empty. */
-void Debug_FlashInit(void){ 
-  // write this as part of Lab 10
-}
-/*The function Debug_FlashRecord() will record 2n bytes into the next
-free block on the flash ROM. You will be able to observe the recorded
-data later using the debugger*/
-void Debug_FlashRecord(uint16_t *pt){
-  // write this as part of Lab 10
-}
 void SysTick_Handler(void){ // every 1ms
   // write this as part of Lab 10
      P2->OUT |= 0x01;
-     Debug_Dump();
+     Debug_Dump(P1->OUT, P2->OUT);
      P2->OUT &= ~0x01;
 }
 
 int main(void){
+    uint16_t i;
   // write this as part of Lab 10
     Clock_Init48MHz();
     LaunchPad_Init(); // built-in switches and LEDs
     Debug_Init();
     for(i=0;i<SIZE;i++){
-        Buffer[i] = (i<<8)+(255-i); // test data
+        P1Buf[i] = (i<<8)+(255-i); // test data
+        P2Buf[i] = (i<<8)+(255-i); // test data
     }
     i = 0;
     while(1){
        P1->OUT |= 0x01;
-       Debug_FlashInit();
        P1->OUT &= ~0x01;
        P2->OUT |= 0x01;
-       Debug_FlashRecord(Buffer); // 114us
        P2->OUT &= ~0x01;
        i++;
     }
